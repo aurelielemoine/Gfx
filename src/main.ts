@@ -9,10 +9,29 @@ let renderer: WebGLRenderer;
 let boxes: THREE.Mesh<THREE.BoxGeometry, THREE.MeshBasicMaterial>[] = [];
 let raycaster: THREE.Raycaster;
 let box3: THREE.Box3[] = [];
+let analyser: AnalyserNode;
+let dataArray: Uint8Array;
+let audio = document.getElementById("audio") as HTMLAudioElement;
 
 init();
+play("files/battements_de_coeur.mp3");
 animate();
-render();
+
+function play(e: string) {
+  console.log(e);
+  audio.src = e; // URL.createObjectURL(e);
+  audio.load();
+  audio.play();
+
+  var context = new AudioContext();
+  var src = context.createMediaElementSource(audio);
+  analyser = context.createAnalyser();
+  src.connect(analyser);
+  analyser.connect(context.destination);
+  analyser.fftSize = 512;
+  var bufferLength = analyser.frequencyBinCount;
+  dataArray = new Uint8Array(bufferLength);
+}
 
 function init() {
   const container = document.querySelector("#app") as HTMLElement;
@@ -57,9 +76,6 @@ function init() {
       }
 
       interaction();
-
-      render();
-
     });
 
   // renderer
@@ -86,6 +102,15 @@ function randomIntFromInterval(min, max, decimalPlaces) { // min and max include
   return (Math.random() * (max - min) + min).toFixed(decimalPlaces) * 1;
 }
 
+function avg(arr: any[]) {
+  var total = arr.reduce(function (sum, b) { return sum + b; });
+  return (total / arr.length);
+}
+
+function max(arr: any[]) {
+  return arr.reduce(function (a, b) { return Math.max(a, b); })
+}    
+
 function interaction(){
   for(let i = 0; i < 20; i++) {
     let cube = addCube(randomIntFromInterval(-0.1, 0.1, 1), randomIntFromInterval(-0.1, 0.1, 1), randomIntFromInterval(-0.1, 0.1, 1));
@@ -97,27 +122,29 @@ function interaction(){
 
 function animate() {
   requestAnimationFrame(animate);
-  // boxes.forEach(el =>
-  //   el.rotation.x += 0.05 
-  // )
-  // boxes.forEach(el =>
-  //   el.rotation.y += 0.03
-  // )
-  // boxes.forEach(el =>
-  //   el.rotation.z += 0.02
-  // )
-
+  const quaternion = new THREE.Quaternion();
+  quaternion.setFromAxisAngle(new THREE.Vector3(2/100, 10/100, 3/100), Math.PI/90);
+  analyser.getByteFrequencyData(dataArray); // calcul la fft
+  var lowerHalfArray = dataArray.slice(0, (dataArray.length / 2) - 1);
+  var upperHalfArray = dataArray.slice((dataArray.length / 2) - 1, dataArray.length - 1);
 
   for(var i = 0; i < box3.length; i++){
     for(var j = 0; j < box3.length ; j++){
       if((box3[i]!= box3[j]) && (box3[i].intersectsBox(box3[j]))){
-        boxes[i].position.x += randomIntFromInterval(-0.03, 0.03, 3)
-        boxes[i].position.y += randomIntFromInterval(-0.03, 0.03, 3)
-        boxes[i].position.z += randomIntFromInterval(-0.03, 0.03, 3)
-        box3[i].setFromObject(boxes[i])
+        boxes[i].applyQuaternion(quaternion);
+        boxes[i].scale.lerp(new THREE.Vector3(avg(lowerHalfArray), avg(lowerHalfArray), avg(lowerHalfArray)), 1);
+        // boxes[i].position.x += avg([lowerHalfArray]);
+        // boxes[i].position.y += avg([lowerHalfArray]);
+        // boxes[i].position.z += avg([lowerHalfArray]);
+        // box3[i].setFromObject(boxes[i])
+        // boxes[i].position.x += randomIntFromInterval(-0.03, 0.03, 3)
+        // boxes[i].position.y += randomIntFromInterval(-0.03, 0.03, 3)
+        // boxes[i].position.z += randomIntFromInterval(-0.03, 0.03, 3)
+        // box3[i].setFromObject(boxes[i])
       }
     }
   }
+
   renderer.render(scene, camera);
 }
 
