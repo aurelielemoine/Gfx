@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - GLTFloader</title>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
+		/>
+		<link type="text/css" rel="stylesheet" href="main.css" />
+	</head>
+
+	<body>
+		<!-- Import maps polyfill -->
+		<!-- Remove this when import maps will be widely supported -->
+		<script
+			async
+			src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"
+		></script>
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../build/three.module.js",
+					"three/addons/": "./jsm/"
+				}
+			}
+		</script>
+
+		<script type="module">
+			import * as THREE from "three";
+
+			import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+			import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+			import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+
+			let camera, scene, renderer, bones;
+
+			// EXO3 : gestion évènements pour RayCast : on ajoute le raycaster
+			let pickedObject, pickedObjectSavedColor, raycaster;
+
+			init();
+			//render();
+			animate();
+
+			function init() {
+				const container = document.createElement("div");
+				document.body.appendChild(container);
+
+				// EXO 2 : paramétrer la caméra
+				const fov = 80;
+				const aspect = window.innerWidth / window.innerHeight; // the canvas default
+				const near = 0.1;
+				const far = 200;
+				camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+				camera.position.set(-10, 10, 10);
+
+				scene = new THREE.Scene();
+
+				//EXO3 : instance du raycaster
+				raycaster = new THREE.Raycaster();
+
+				new RGBELoader()
+					.setPath("textures/equirectangular/")
+					.load("royal_esplanade_1k.hdr", function (texture) {
+						texture.mapping = THREE.EquirectangularReflectionMapping;
+
+						scene.background = texture;
+						scene.environment = texture;
+
+						render();
+
+						// EXO1 :  charger un gltf + tweak géométrie
+						const loader = new GLTFLoader().setPath("models/gltf/");
+						loader.load("pieuvre_anim.gltf", function (gltf) {
+							gltf.scene.scale.set(.1,.1,.1)
+							gltf.scene.children[1];
+							console.log(gltf.scene);
+							scene.add(gltf.scene);
+							
+							bones = [];
+
+							var object = scene.getObjectByName("Bone");
+							bones.push(object);
+							object = object.children;
+
+							while(!(object === undefined || object.length === 0)){
+								bones.push(object[0]);
+								object = object[0].children;
+							}
+
+							console.log(bones);
+
+							render();
+						});
+					});
+
+				renderer = new THREE.WebGLRenderer({ antialias: true });
+				renderer.setPixelRatio(window.devicePixelRatio);
+				renderer.setSize(window.innerWidth, window.innerHeight);
+				renderer.toneMapping = THREE.ACESFilmicToneMapping;
+				renderer.toneMappingExposure = 1;
+				renderer.outputEncoding = THREE.sRGBEncoding;
+				container.appendChild(renderer.domElement);
+
+				const controls = new OrbitControls(camera, renderer.domElement);
+				controls.addEventListener("change", render); // use if there is no animation loop
+				controls.minDistance = 2;
+				controls.maxDistance = 10;
+				controls.target.set(0, 0, -0.2);
+				controls.update();
+
+				console.log("mesh");
+
+				//EXO3 : picking, on ajoute la gestion de l'évènement pour avoir un callback sur une méthode qui fera le lancer de rayon
+				window.addEventListener("click", setPickPosition);
+
+				window.addEventListener("resize", onWindowResize);
+
+			}
+
+			function animate() {
+				//requestAnimationFrame(animate);
+				// bones.forEach(bone => {
+				// 	bone.rotation.y += 0.005;
+				// 	bone.rotation.z += 0.005;
+				// });
+
+				bones[3].rotation.x += 0.05;
+				// bones[4].rotation.x += 0.005;
+				// bones[5].rotation.x += 0.005;
+				// bones[6].rotation.x += 0.005;
+				// bones[7].rotation.x += 0.005;
+				
+				renderer.render(scene, camera);
+			}
+
+			function onWindowResize() {
+				// EXO2 = tester avec et sans la mise à jour de la camera
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize(window.innerWidth, window.innerHeight);
+
+				render();
+			}
+
+			function render() {
+				renderer.render(scene, camera);
+			}
+
+			function setPickPosition(event) {
+				// on normalise entre -1.O et 1.0 les coordonnées du pointeur
+				const pos = { x: 0, y: 0 };
+				pos.x = (event.clientX / window.innerWidth) * 2 - 1;
+				pos.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+				// cast a ray through the frustum
+				raycaster.setFromCamera(pos, camera);
+				// get the list of objects the ray intersected
+				const intersectedObjects = raycaster.intersectObjects(scene.children);
+
+				if (intersectedObjects.length) {
+					console.log("pick : ", intersectedObjects[0]);
+					// pick the first object. It's the closest one
+					const m =new THREE.Matrix4();
+					const pickedObject = intersectedObjects[0].object;
+					const matrix = pickedObject.matrix;
+					m.set(1, 0, 0, 0.4, 0, 1, 0, 0.4, 0, 0, 1, 0.4, 0, 0, 0, 1);
+					pickedObject.matrix.multiply(m);
+					console.log(pickedObject.maytrix);
+					//pickedObject.updateMatrix();
+
+					pickedObject.geometry.attributes.position.needsUpdate = true;
+					pickedObject.matrixAutoUpdate = false;
+
+					mixer = new THREE.AnimationMixer(gltf.scene);
+					gltf.animations.forEach((clip) => {
+						mixer.clipAction(clip).play();
+					});
+
+					//render();
+					animate();
+				}
+			}
+
+			// EXO 3 : on récupère la géométrie sur laquelle on a cliqué pour décaler la face
+			function setPickPositionFace(event) {
+				// on normalise entre -1.O et 1.0 les coordonnées du pointeur
+				const pos = { x: 0, y: 0 };
+				pos.x = (event.clientX / window.innerWidth) * 2 - 1;
+				pos.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+				// cast a ray through the frustum
+				raycaster.setFromCamera(pos, camera);
+				// get the list of objects the ray intersected
+				const intersectedObjects = raycaster.intersectObjects(scene.children);
+
+				if (intersectedObjects.length) {
+					console.log("pick : ", intersectedObjects[0]);
+					// pick the first object. It's the closest one
+					const pickedObject = intersectedObjects[0].object; // on récupère l'objet cliqué
+					const meshPosition = pickedObject.geometry.attributes.position.array; 
+					const faceindex = pickedObject.geometry.index.array; 
+					const face = intersectedObjects[0].face; // plus précis : on récupère la facette cliquée
+					
+					// on décale chaque sommet de la facette dans le sans de la normale
+					const div = 0.3;
+					meshPosition[  face.a*3] += face.normal.x * div;
+					meshPosition[  face.a*3+1] += face.normal.y * div ;
+					meshPosition[  face.a*3+2] += face.normal.z * div;
+					meshPosition[  face.b*3] += face.normal.x * div;
+					meshPosition[  face.b*3+1] += face.normal.y * div ;
+					meshPosition[  face.b*3+2] += face.normal.z * div;
+					meshPosition[  face.c*3] += face.normal.x * div;
+					meshPosition[  face.c*3+1] += face.normal.y * div ;
+					meshPosition[  face.c*3+2] += face.normal.z * div;
+				
+					// on met à jour en signalant les géométries à retransformer
+					pickedObject.geometry.attributes.position.needsUpdate = true;
+					pickedObject.geometry.computeBoundingBox();
+					pickedObject.geometry.computeBoundingSphere();
+					pickedObject.material.needsUpdate = true;
+
+				} else {
+	
+					console.log("no pick");
+				}
+
+				render();
+			}
+		</script>
+	</body>
+</html>

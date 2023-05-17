@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - GLTFloader</title>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
+		/>
+		<link type="text/css" rel="stylesheet" href="main.css" />
+	</head>
+
+	<body>
+		<!-- Import maps polyfill -->
+		<!-- Remove this when import maps will be widely supported -->
+		<script
+			async
+			src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"
+		></script>
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../build/three.module.js",
+					"three/addons/": "./jsm/"
+				}
+			}
+		</script>
+
+		<script type="module">
+			import * as THREE from "three";
+
+			import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+			import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+			import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+
+			let camera, scene, renderer;
+
+			// EXO3 : gestion évènements pour RayCast : on ajoute le raycaster
+			let pickedObject, pickedObjectSavedColor, raycaster, boxes;
+
+			init();
+			render();
+
+			function init() {
+				const container = document.createElement("div");
+				document.body.appendChild(container);
+
+				// EXO 2 : paramétrer la caméra
+				const fov = 60;
+				const aspect = window.innerWidth / window.innerHeight; // the canvas default
+				const near = 0.1;
+				const far = 200;
+				camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+				camera.position.set(-1.8, 0.6, 2.7);
+
+				scene = new THREE.Scene();
+
+				//EXO3 : instance du raycaster
+				raycaster = new THREE.Raycaster();
+
+				boxes = Array();
+
+				new RGBELoader()
+					.setPath("textures/equirectangular/")
+					.load("royal_esplanade_1k.hdr", function (texture) {
+						texture.mapping = THREE.EquirectangularReflectionMapping;
+
+						scene.background = texture;
+						scene.environment = texture;
+
+						var factor = 0.5;
+						for (let l = 0; l < 20; l++) {
+							boxes.push(
+								addCube(
+									Math.random() * factor,
+									Math.random() * factor,
+									Math.random() * factor
+								)
+							);
+							
+						}
+
+						// for (let i = 0; i < 5; i++) {
+						// 	for (let j = 0; j < 5; j++) {
+						// 		for (let k = 0; k < 5; k++) {
+						// 			const elementCube = addCube(i*0.01, j*0.01, k*0.01);
+						// 			animate(elementCube);
+						// 		}
+						// 	}
+						// }
+
+						//mesh.geometry.computeBoundingBox();
+						render();
+
+					});
+
+				renderer = new THREE.WebGLRenderer({ antialias: true });
+				renderer.setPixelRatio(window.devicePixelRatio);
+				renderer.setSize(window.innerWidth, window.innerHeight);
+				renderer.toneMapping = THREE.ACESFilmicToneMapping;
+				renderer.toneMappingExposure = 1;
+				renderer.outputEncoding = THREE.sRGBEncoding;
+				container.appendChild(renderer.domElement);
+
+				const controls = new OrbitControls(camera, renderer.domElement);
+				controls.addEventListener("change", render); // use if there is no animation loop
+				controls.minDistance = 2;
+				controls.maxDistance = 10;
+				controls.target.set(0, 0, -0.2);
+				controls.update();
+
+				window.addEventListener("resize", onWindowResize);
+			}
+
+			function onWindowResize() {
+				// EXO2 = tester avec et sans la mise à jour de la camera
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize(window.innerWidth, window.innerHeight);
+
+				render();
+			}
+
+			function animate(cub) {
+
+				cub.rotation.x += 0.05;
+				renderer.render(scene, camera);
+			}
+
+			function addCube(px, py, pz) {
+                var colorandom = new THREE.Color(0xffffff);
+                colorandom.setHex(Math.random() * 0xffffff);
+                var geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1); //x,y,z
+                var boxMaterial = new THREE.MeshBasicMaterial({ color: colorandom });
+                var cube = new THREE.Mesh(geometry, boxMaterial);
+
+                cube.position.set(px, py, pz);
+                cube.geometry.computeBoundingBox(); // null sinon
+                scene.add(cube);
+                return cube;
+            }
+
+			function render() {
+				renderer.render(scene, camera);
+			}
+			
+		</script>
+	</body>
+</html>
